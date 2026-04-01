@@ -55,40 +55,39 @@ def get_coords_and_code_pure(address):
     timestamp = str(int(time.time() * 1000))
     geo_uri = f"/map-geocode/v2/geocode?query={urllib.parse.quote(address)}"
     
-    # [수정 1] User-Agent를 추가해서 크롬 브라우저인 척 위장합니다.
+    # 💡 클라우드타입에서 발급받은 본인의 앱 접속 주소를 적어주세요.
+    # (주의: 맨 뒤에 슬래시(/)는 빼고 적으시는 게 안전합니다)
+    APP_URL = "https://port-0-slp-helper-어쩌구.cloudtype.app" 
+    
     headers = {
         "x-ncp-iam-access-key": IAM_ACCESS_KEY, 
         "x-ncp-apigw-timestamp": timestamp,
         "x-ncp-apigw-signature-v2": make_signature(geo_uri, timestamp),
         "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, 
         "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Referer": APP_URL  # <--- [핵심 해결책] 내가 이 도메인에서 왔다고 네이버에 통보!
     }
     
     try:
-        # [수정 2] timeout을 5초에서 20초로 대폭 늘려줍니다.
-        res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=20)
+        res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=10)
         
         if res.status_code == 200:
             addr_data = res.json().get('addresses')
-            if not addr_data: 
-                st.warning("검색된 주소 결과가 없습니다.")
-                return None
+            if not addr_data: return None
             lon, lat = addr_data[0]['x'], addr_data[0]['y']
             
             rev_uri = f"/map-reversegeocode/v2/gc?coords={lon},{lat}&orders=legalcode&output=json"
             
-            # 리버스 지오코딩 헤더에도 User-Agent 추가
+            # 리버스 지오코딩 쪽 헤더에도 똑같이 추가해 줍니다.
             rev_headers = {
                 "x-ncp-iam-access-key": IAM_ACCESS_KEY, 
                 "x-ncp-apigw-timestamp": timestamp,
                 "x-ncp-apigw-signature-v2": make_signature(rev_uri, timestamp),
                 "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, 
                 "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "Referer": APP_URL  # <--- [핵심 해결책]
             }
-            # 여기도 timeout 20으로 변경
-            rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=20)
+            rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=10)
             
             full_code = "1168066200"
             if rev_res.status_code == 200:
@@ -98,7 +97,7 @@ def get_coords_and_code_pure(address):
         else:
             st.error(f"🚨 네이버 API 에러: {res.status_code} - {res.text}")
     except Exception as e:
-        st.error(f"🚨 서버 통신 에러 발생: {e}")
+        st.error(f"🚨 통신 에러: {e}")
         
     return None
 
