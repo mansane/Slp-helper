@@ -13,13 +13,18 @@ from datetime import datetime, timedelta
 from math import radians, cos, sin, asin, sqrt
 from concurrent.futures import ThreadPoolExecutor
 
-# --- [1. 보안 인증 정보 설정] ---
-IAM_ACCESS_KEY = st.secrets["IAM_ACCESS_KEY"]
-IAM_SECRET_KEY = st.secrets["IAM_SECRET_KEY"]
-CLIENT_ID = st.secrets["CLIENT_ID"]
-CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
-MOLIT_KEY = st.secrets["MOLIT_KEY"]
-
+# --- [1. 보안 인증 정보 설정 (안전하게 수정됨)] ---
+# 코드 내에 절대 실제 키를 하드코딩하지 않습니다!
+try:
+    IAM_ACCESS_KEY = st.secrets["IAM_ACCESS_KEY"]
+    IAM_SECRET_KEY = st.secrets["IAM_SECRET_KEY"]
+    CLIENT_ID = st.secrets["CLIENT_ID"]
+    CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
+    MOLIT_KEY = st.secrets["MOLIT_KEY"]
+except (FileNotFoundError, KeyError):
+    # 로컬이나 웹에 Secrets 설정이 안 되어 있을 경우 경고를 띄우고 앱을 멈춥니다.
+    st.error("🚨 보안 키(Secrets) 설정이 누락되었습니다! 대시보드 설정을 확인해주세요.")
+    st.stop()
 # --- [2. 세션 상태 초기화 및 관리] ---
 if 'lat' not in st.session_state: st.session_state.lat = 37.4742
 if 'lon' not in st.session_state: st.session_state.lon = 127.1053
@@ -124,6 +129,7 @@ def fetch_and_filter_radius(lawd_cd, category, center_lat, center_lon, radius_km
                 if res: st.session_state.coords_cache[addr] = res
 
     filtered = []
+    current_year = datetime.now().year
     for _, r in df_raw.iterrows():
         b_addr = f"{city_prefix} {r['umdNm']} {r['jibun']}"
         cache_data = st.session_state.coords_cache.get(b_addr)
@@ -141,7 +147,7 @@ def fetch_and_filter_radius(lawd_cd, category, center_lat, center_lon, radius_km
                         '층': r.get('floor', '-'), '보증금': depo_orig * 10, '임대료': rent_orig * 10,
                         '환산 임대료': round(std_rent * 10, 0),
                         '평당 임대료': round((std_rent * 10) / r['전용면적(평)'], 0) if r['전용면적(평)'] > 0 else 0,
-                        '건축년도': build_y, '경과년수': 2026 - build_y if build_y > 0 else 0,
+                        '건축년도': build_y, '경과년수': current_year - build_y if build_y > 0 else 0,
                         '법정동코드10': cache_data[2], '지번': r.get('jibun'), 'umdNm': r['umdNm'],
                         '거래월': f"{r['dealYear']}.{r['dealMonth']}", '전용면적(평)': r['전용면적(평)'],
                         'sggCd': r.get('sggCd') or r.get('sigunguCode') or lawd_cd
@@ -162,25 +168,21 @@ with st.sidebar:
 
     st.divider()
     st.subheader("보증금 설정 (천원)")
-    # [수정] 기본 보증금 500만원 (5,000천원) 세팅
     depo_slider = st.slider("환산 기준 보증금", 0, 100000, 5000, step=1000)
     target_depo_1000 = st.number_input("보증금 직접 입력", 0, 100000, depo_slider)
     target_depo_orig = target_depo_1000 / 10
 
     st.divider()
     st.subheader("면적 및 기간 설정")
-    # [수정] 기본 평수 0평~9평 세팅
     p_slider = st.slider("전용면적 범위 (평)", 0, 100, (0, 9))
     p_min = st.number_input("최소 평수", 0, 100, p_slider[0])
     p_max = st.number_input("최대 평수", 0, 100, p_slider[1])
 
-    # [수정] 기본 수집 개월수 3개월 세팅
     months_slider = st.slider("수집 개월 수", 1, 36, 3)
     months_input = st.number_input("개월 수 직접 입력", 1, 36, months_slider)
 
     st.divider()
     st.subheader("반경 설정 (m)")
-    # [수정] 기본 분석 반경 500m 세팅
     radius_slider = st.slider("분석 반경", 100, 5000, 500, step=100)
     radius_input = st.number_input("반경 직접 입력", 100, 5000, radius_slider)
 
@@ -189,7 +191,10 @@ with st.sidebar:
         st.subheader("결과 내 연식 필터")
         min_yr = int(st.session_state.df_filtered['건축년도'].min())
         max_yr = int(st.session_state.df_filtered['건축년도'].max())
-        year_filter = st.slider("준공년도 범위", min_yr, max_yr, (min_yr, max_yr))
+        if min_yr < max_yr:
+            year_filter = st.slider("준공년도 범위", min_yr, max_yr, (min_yr, max_yr))
+        else:
+            year_filter = (min_yr, max_yr)
 
     st.divider()
     if st.button("데이터 분석 시작", use_container_width=True):
@@ -219,8 +224,8 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=17)
-    folium.TileLayer(tiles="https://xdworld.vworld.kr/2d/LandTalk/service/{z}/{x}/{y}.png", attr='Vworld', overlay=True,
-                     opacity=0.7).add_to(m)
+
+    # [핵심 수정 1] VWorld 도메인 차단 방지를 위해 기본 지도(OpenStreetMap) 사용
     folium.Marker([st.session_state.lat, st.session_state.lon], tooltip="분석 중심점",
                   icon=folium.Icon(color='lightblue', icon='info-sign')).add_to(m)
     folium.Circle([st.session_state.lat, st.session_state.lon], radius=radius_input, color='skyblue', fill=True,
@@ -234,7 +239,8 @@ with col1:
             folium.Marker([r['lat'], r['lon']], tooltip=f"<b>{r['단지명']}</b>",
                           icon=folium.Icon(color=m_color, icon='home')).add_to(m)
 
-    map_data = st_folium(m, width="100%", height=600, key=f"map_v{st.session_state.map_key}")
+    # [핵심 수정 2] width 속성을 use_container_width=True 로 변경하여 드래그/클릭 먹통 버그 해결
+    map_data = st_folium(m, use_container_width=True, height=600, key=f"map_v{st.session_state.map_key}")
 
 with col2:
     st.subheader("단지 상세 정보")
@@ -273,7 +279,7 @@ with col2:
             for c in ['보증금', '임대료', '환산 임대료', '평당 임대료']: disp[c] = disp[c].map('{:,.0f}천원'.format)
             st.dataframe(disp.sort_values('거래월', ascending=False), use_container_width=True)
     else:
-        st.info("마커를 클릭하세요.")
+        st.info("지도에서 마커를 클릭하세요.")
 
 st.divider()
 if st.session_state.collected_data:
