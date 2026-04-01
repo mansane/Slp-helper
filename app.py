@@ -15,22 +15,23 @@ from math import radians, cos, sin, asin, sqrt
 from concurrent.futures import ThreadPoolExecutor
 
 # --- [1. 보안 인증 정보 설정] ---
-# 환경변수(클라우드타입) 또는 Secrets(로컬)에서 키를 가져오고,
-# 띄어쓰기(공백) 때문에 생기는 401 에러를 막기 위해 .strip()으로 여백을 잘라냅니다.
 IAM_ACCESS_KEY = os.environ.get("IAM_ACCESS_KEY", st.secrets.get("IAM_ACCESS_KEY", "")).strip()
 IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY", st.secrets.get("IAM_SECRET_KEY", "")).strip()
 CLIENT_ID = os.environ.get("CLIENT_ID", st.secrets.get("CLIENT_ID", "")).strip()
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET", st.secrets.get("CLIENT_SECRET", "")).strip()
 MOLIT_KEY = os.environ.get("MOLIT_KEY", st.secrets.get("MOLIT_KEY", "")).strip()
 
-# 🚨 [매우 중요] 여기에 클라우드타입에서 발급받은 본인의 실제 웹 주소를 넣으세요!
-# 네이버 콘솔에 등록한 주소와 똑같아야 하며, 한글이 절대 들어가면 안 됩니다.
-# 예시: "https://port-0-slp-helper-a1b2c3d4.cloudtype.app"
-APP_URL = "https://port-0-slp-helper-mnfp06bdea92456d.sel3.cloudtype.app/"
+APP_URL = "https://port-0-slp-helper-mnfp06bdea92456d.sel3.cloudtype.app" # 본인 주소 확인!
 
-if not CLIENT_ID:
-    st.error("🚨 환경변수(보안 키)가 로드되지 않았습니다. 클라우드타입 대시보드를 확인해주세요.")
-    st.stop()
+# ==========================================
+# 🚨 디버깅을 위한 탐정 코드 (확인 후 나중에 지우세요!)
+st.warning("🔍 [서버에 로드된 키 값 상태 확인]")
+st.write(f"- IAM_ACCESS_KEY 길이: {len(IAM_ACCESS_KEY)} (정상: 보통 20자 이상)")
+st.write(f"- IAM_SECRET_KEY 길이: {len(IAM_SECRET_KEY)} (정상: 보통 40자 이상)")
+st.write(f"- CLIENT_ID: '{CLIENT_ID}' (정상: 10자리 영문/숫자, 빈칸이 없어야 함)")
+st.write(f"- CLIENT_SECRET 길이: {len(CLIENT_SECRET)}")
+st.write(f"- APP_URL 설정값: '{APP_URL}'")
+# ==========================================
 
 # --- [2. 세션 상태 초기화 및 관리] ---
 if 'lat' not in st.session_state: st.session_state.lat = 37.4742
