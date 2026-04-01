@@ -63,7 +63,7 @@ def get_coords_and_code_pure(address):
     }
 
     try:
-        res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=5)
+        res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=20)
         if res.status_code == 200:
             addr_data = res.json().get('addresses')
             if not addr_data:
@@ -79,7 +79,7 @@ def get_coords_and_code_pure(address):
                 "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
                 "X-NCP-APIGW-API-KEY": CLIENT_SECRET
             }
-            rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=5)
+            rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=20)
             full_code = "1168066200"
             if rev_res.status_code == 200:
                 results = rev_res.json().get('results', [])
@@ -108,7 +108,7 @@ def fetch_and_filter_radius(lawd_cd, category, center_lat, center_lon, radius_km
         params = {'serviceKey': MOLIT_KEY, 'LAWD_CD': lawd_cd, 'DEAL_YMD': month, 'returnType': 'xml',
                   'numOfRows': '1000'}
         try:
-            res = requests.get(base_url, params=params, timeout=10)
+            res = requests.get(base_url, params=params, timeout=20)
             d = xmltodict.parse(res.content)
             items = d.get('response', {}).get('body', {}).get('items', {}).get('item', [])
             if items: all_data.extend(items if isinstance(items, list) else [items])
