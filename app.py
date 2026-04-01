@@ -54,27 +54,44 @@ def make_signature(uri, timestamp):
 def get_coords_and_code_pure(address):
     timestamp = str(int(time.time() * 1000))
     geo_uri = f"/map-geocode/v2/geocode?query={urllib.parse.quote(address)}"
-    headers = {"x-ncp-iam-access-key": IAM_ACCESS_KEY, "x-ncp-apigw-timestamp": timestamp,
-               "x-ncp-apigw-signature-v2": make_signature(geo_uri, timestamp),
-               "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, "X-NCP-APIGW-API-KEY": CLIENT_SECRET}
+    headers = {
+        "x-ncp-iam-access-key": IAM_ACCESS_KEY,
+        "x-ncp-apigw-timestamp": timestamp,
+        "x-ncp-apigw-signature-v2": make_signature(geo_uri, timestamp),
+        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": CLIENT_SECRET
+    }
+
     try:
         res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=5)
         if res.status_code == 200:
             addr_data = res.json().get('addresses')
-            if not addr_data: return None
+            if not addr_data:
+                st.warning("검색된 주소 결과가 없습니다.")
+                return None
             lon, lat = addr_data[0]['x'], addr_data[0]['y']
+
             rev_uri = f"/map-reversegeocode/v2/gc?coords={lon},{lat}&orders=legalcode&output=json"
-            rev_headers = {"x-ncp-iam-access-key": IAM_ACCESS_KEY, "x-ncp-apigw-timestamp": timestamp,
-                           "x-ncp-apigw-signature-v2": make_signature(rev_uri, timestamp),
-                           "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, "X-NCP-APIGW-API-KEY": CLIENT_SECRET}
+            rev_headers = {
+                "x-ncp-iam-access-key": IAM_ACCESS_KEY,
+                "x-ncp-apigw-timestamp": timestamp,
+                "x-ncp-apigw-signature-v2": make_signature(rev_uri, timestamp),
+                "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
+                "X-NCP-APIGW-API-KEY": CLIENT_SECRET
+            }
             rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=5)
             full_code = "1168066200"
             if rev_res.status_code == 200:
                 results = rev_res.json().get('results', [])
                 if results: full_code = results[0].get('code', {}).get('id', '1168066200')
             return (float(lat), float(lon), full_code, addr_data[0].get('roadAddress', address))
-    except:
-        pass
+        else:
+            # 진단 핵심: 상태 코드가 200(성공)이 아니면 무조건 화면에 에러를 띄웁니다.
+            st.error(f"🚨 네이버 API 에러: {res.status_code} - {res.text}")
+    except Exception as e:
+        # 통신 자체가 끊기거나 터졌을 때 띄웁니다.
+        st.error(f"🚨 서버 통신 에러 발생: {e}")
+
     return None
 
 
