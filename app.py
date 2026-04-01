@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
@@ -16,14 +17,13 @@ from concurrent.futures import ThreadPoolExecutor
 # --- [1. 보안 인증 정보 설정 (안전하게 수정됨)] ---
 # 코드 내에 절대 실제 키를 하드코딩하지 않습니다!
 try:
-    IAM_ACCESS_KEY = st.secrets["IAM_ACCESS_KEY"]
-    IAM_SECRET_KEY = st.secrets["IAM_SECRET_KEY"]
-    CLIENT_ID = st.secrets["CLIENT_ID"]
-    CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
-    MOLIT_KEY = st.secrets["MOLIT_KEY"]
-except (FileNotFoundError, KeyError):
-    # 로컬이나 웹에 Secrets 설정이 안 되어 있을 경우 경고를 띄우고 앱을 멈춥니다.
-    st.error("🚨 보안 키(Secrets) 설정이 누락되었습니다! 대시보드 설정을 확인해주세요.")
+    IAM_ACCESS_KEY = os.environ.get("IAM_ACCESS_KEY") or st.secrets["IAM_ACCESS_KEY"]
+    IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY") or st.secrets["IAM_SECRET_KEY"]
+    CLIENT_ID = os.environ.get("CLIENT_ID") or st.secrets["CLIENT_ID"]
+    CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or st.secrets["CLIENT_SECRET"]
+    MOLIT_KEY = os.environ.get("MOLIT_KEY") or st.secrets["MOLIT_KEY"]
+except Exception:
+    st.error("🚨 보안 키(환경변수) 설정이 누락되었습니다! 배포 설정을 확인해주세요.")
     st.stop()
 # --- [2. 세션 상태 초기화 및 관리] ---
 if 'lat' not in st.session_state: st.session_state.lat = 37.4742
