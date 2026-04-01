@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 # 코드 내에 절대 실제 키를 하드코딩하지 않습니다!
 try:
     IAM_ACCESS_KEY = os.environ.get("IAM_ACCESS_KEY") or st.secrets["IAM_ACCESS_KEY"]
-    IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY") or st.secrets["IAM_SECRET_KEY"]
+    IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY", "").strip() or st.secrets["IAM_SECRET_KEY"]
     CLIENT_ID = os.environ.get("CLIENT_ID") or st.secrets["CLIENT_ID"]
     CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or st.secrets["CLIENT_SECRET"]
     MOLIT_KEY = os.environ.get("MOLIT_KEY") or st.secrets["MOLIT_KEY"]
