@@ -14,17 +14,24 @@ from datetime import datetime, timedelta
 from math import radians, cos, sin, asin, sqrt
 from concurrent.futures import ThreadPoolExecutor
 
-# --- [1. 보안 인증 정보 설정 (안전하게 수정됨)] ---
-# 코드 내에 절대 실제 키를 하드코딩하지 않습니다!
-try:
-    IAM_ACCESS_KEY = os.environ.get("IAM_ACCESS_KEY") or st.secrets["IAM_ACCESS_KEY"]
-    IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY", "").strip() or st.secrets["IAM_SECRET_KEY"]
-    CLIENT_ID = os.environ.get("CLIENT_ID") or st.secrets["CLIENT_ID"]
-    CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or st.secrets["CLIENT_SECRET"]
-    MOLIT_KEY = os.environ.get("MOLIT_KEY") or st.secrets["MOLIT_KEY"]
-except Exception:
-    st.error("🚨 보안 키(환경변수) 설정이 누락되었습니다! 배포 설정을 확인해주세요.")
+# --- [1. 보안 인증 정보 설정] ---
+# 환경변수(클라우드타입) 또는 Secrets(로컬)에서 키를 가져오고,
+# 띄어쓰기(공백) 때문에 생기는 401 에러를 막기 위해 .strip()으로 여백을 잘라냅니다.
+IAM_ACCESS_KEY = os.environ.get("IAM_ACCESS_KEY", st.secrets.get("IAM_ACCESS_KEY", "")).strip()
+IAM_SECRET_KEY = os.environ.get("IAM_SECRET_KEY", st.secrets.get("IAM_SECRET_KEY", "")).strip()
+CLIENT_ID = os.environ.get("CLIENT_ID", st.secrets.get("CLIENT_ID", "")).strip()
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET", st.secrets.get("CLIENT_SECRET", "")).strip()
+MOLIT_KEY = os.environ.get("MOLIT_KEY", st.secrets.get("MOLIT_KEY", "")).strip()
+
+# 🚨 [매우 중요] 여기에 클라우드타입에서 발급받은 본인의 실제 웹 주소를 넣으세요!
+# 네이버 콘솔에 등록한 주소와 똑같아야 하며, 한글이 절대 들어가면 안 됩니다.
+# 예시: "https://port-0-slp-helper-a1b2c3d4.cloudtype.app"
+APP_URL = "https://port-0-slp-helper-mnfp06bdea92456d.sel3.cloudtype.app/"
+
+if not CLIENT_ID:
+    st.error("🚨 환경변수(보안 키)가 로드되지 않았습니다. 클라우드타입 대시보드를 확인해주세요.")
     st.stop()
+
 # --- [2. 세션 상태 초기화 및 관리] ---
 if 'lat' not in st.session_state: st.session_state.lat = 37.4742
 if 'lon' not in st.session_state: st.session_state.lon = 127.1053
@@ -54,41 +61,37 @@ def make_signature(uri, timestamp):
 def get_coords_and_code_pure(address):
     timestamp = str(int(time.time() * 1000))
     geo_uri = f"/map-geocode/v2/geocode?query={urllib.parse.quote(address)}"
-    
-    # 💡 클라우드타입에서 발급받은 본인의 앱 접속 주소를 적어주세요.
-    # (주의: 맨 뒤에 슬래시(/)는 빼고 적으시는 게 안전합니다)
-    APP_URL = "https://port-0-slp-helper-어쩌구.cloudtype.app" 
-    
+
+    # Referer를 추가하여 네이버 콘솔 도메인 인증(401) 방어
     headers = {
-        "x-ncp-iam-access-key": IAM_ACCESS_KEY, 
+        "x-ncp-iam-access-key": IAM_ACCESS_KEY,
         "x-ncp-apigw-timestamp": timestamp,
         "x-ncp-apigw-signature-v2": make_signature(geo_uri, timestamp),
-        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, 
+        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
         "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
-        "Referer": APP_URL  # <--- [핵심 해결책] 내가 이 도메인에서 왔다고 네이버에 통보!
+        "Referer": APP_URL
     }
-    
+
     try:
         res = requests.get(f"https://maps.apigw.ntruss.com{geo_uri}", headers=headers, timeout=10)
-        
+
         if res.status_code == 200:
             addr_data = res.json().get('addresses')
-            if not addr_data: return None
+            if not addr_data:
+                return None
             lon, lat = addr_data[0]['x'], addr_data[0]['y']
-            
+
             rev_uri = f"/map-reversegeocode/v2/gc?coords={lon},{lat}&orders=legalcode&output=json"
-            
-            # 리버스 지오코딩 쪽 헤더에도 똑같이 추가해 줍니다.
             rev_headers = {
-                "x-ncp-iam-access-key": IAM_ACCESS_KEY, 
+                "x-ncp-iam-access-key": IAM_ACCESS_KEY,
                 "x-ncp-apigw-timestamp": timestamp,
                 "x-ncp-apigw-signature-v2": make_signature(rev_uri, timestamp),
-                "X-NCP-APIGW-API-KEY-ID": CLIENT_ID, 
+                "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
                 "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
-                "Referer": APP_URL  # <--- [핵심 해결책]
+                "Referer": APP_URL
             }
             rev_res = requests.get(f"https://maps.apigw.ntruss.com{rev_uri}", headers=rev_headers, timeout=10)
-            
+
             full_code = "1168066200"
             if rev_res.status_code == 200:
                 results = rev_res.json().get('results', [])
@@ -98,7 +101,6 @@ def get_coords_and_code_pure(address):
             st.error(f"🚨 네이버 API 에러: {res.status_code} - {res.text}")
     except Exception as e:
         st.error(f"🚨 통신 에러: {e}")
-        
     return None
 
 
@@ -112,10 +114,10 @@ def fetch_and_filter_radius(lawd_cd, category, center_lat, center_lon, radius_km
 
     prog_bar = st.sidebar.progress(0)
     for i, month in enumerate(months):
-        params = {'serviceKey': MOLIT_KEY, 'LAWD_CD': lawd_cd, 'DEAL_YMD': month, 'returnType': 'xml',
-                  'numOfRows': '1000'}
+        params = {'serviceKey': urllib.parse.unquote(MOLIT_KEY), 'LAWD_CD': lawd_cd, 'DEAL_YMD': month,
+                  'returnType': 'xml', 'numOfRows': '1000'}
         try:
-            res = requests.get(base_url, params=params, timeout=20)
+            res = requests.get(base_url, params=params, timeout=15)
             d = xmltodict.parse(res.content)
             items = d.get('response', {}).get('body', {}).get('items', {}).get('item', [])
             if items: all_data.extend(items if isinstance(items, list) else [items])
@@ -249,7 +251,6 @@ col1, col2 = st.columns([2, 1])
 with col1:
     m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=17)
 
-    # [핵심 수정 1] VWorld 도메인 차단 방지를 위해 기본 지도(OpenStreetMap) 사용
     folium.Marker([st.session_state.lat, st.session_state.lon], tooltip="분석 중심점",
                   icon=folium.Icon(color='lightblue', icon='info-sign')).add_to(m)
     folium.Circle([st.session_state.lat, st.session_state.lon], radius=radius_input, color='skyblue', fill=True,
@@ -263,7 +264,7 @@ with col1:
             folium.Marker([r['lat'], r['lon']], tooltip=f"<b>{r['단지명']}</b>",
                           icon=folium.Icon(color=m_color, icon='home')).add_to(m)
 
-    # [핵심 수정 2] width 속성을 use_container_width=True 로 변경하여 드래그/클릭 먹통 버그 해결
+    # 웹에서 클릭/드래그가 먹히도록 use_container_width 적용
     map_data = st_folium(m, use_container_width=True, height=600, key=f"map_v{st.session_state.map_key}")
 
 with col2:
